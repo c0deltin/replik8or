@@ -2,9 +2,8 @@
 A Kubernetes operator that replicates ConfigMap and Secrets.
 
 ## Description
-replik8or copies annotated ConfigMap's and Secrets into other kubernetes namespaces.
-It's heavily inspired by emberstack/kubernetes-reflector! The reason for this project is that I've once faced a bug in 
-the kubernetes-reflector project but I really really don't like C# 🙃.
+replik8or copies annotated ConfigMap's and Secrets into other Kubernetes namespaces.
+The project is heavily inspired by [emberstack/kubernetes-reflector](https://github.com/emberstack/kubernetes-reflector)! The reason I've rebuilt the operator is that I wanted a solution written in Go.
 
 ## Deployment
 

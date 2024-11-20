@@ -16,50 +16,50 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-type ConfigMapReconciler struct {
+type SecretReconciler struct {
 	*DefaultController
 }
 
-func (r *ConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *SecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	//logger := log.FromContext(ctx).WithValues("configmap", req.NamespacedName)
 
-	var configMap corev1.ConfigMap
-	if err := r.Get(ctx, req.NamespacedName, &configMap); err != nil {
+	var secret corev1.Secret
+	if err := r.Get(ctx, req.NamespacedName, &secret); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if _, ok := configMap.GetAnnotations()[ReplicateScheduleRequeue]; ok {
-		delete(configMap.GetAnnotations(), ReplicateScheduleRequeue)
-		return ctrl.Result{}, r.Update(ctx, &configMap)
+	if _, ok := secret.GetAnnotations()[ReplicateScheduleRequeue]; ok {
+		delete(secret.GetAnnotations(), ReplicateScheduleRequeue)
+		return ctrl.Result{}, r.Update(ctx, &secret)
 	}
 
-	if !configMap.GetDeletionTimestamp().IsZero() {
-		return r.deleteAndFinalize(ctx, &configMap)
+	if !secret.GetDeletionTimestamp().IsZero() {
+		return r.deleteAndFinalize(ctx, &secret)
 	}
 
-	if controllerutil.AddFinalizer(&configMap, ReplicatorFinalizer) {
-		if err := r.Update(ctx, &configMap); err != nil {
+	if controllerutil.AddFinalizer(&secret, ReplicatorFinalizer) {
+		if err := r.Update(ctx, &secret); err != nil {
 			return ctrl.Result{}, fmt.Errorf("adding finalizer: %w", err)
 		}
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	source, isReplica, err := r.isReplica(ctx, &configMap)
+	source, isReplica, err := r.isReplica(ctx, &secret)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if isReplica {
-		err = r.replicate(ctx, source, configMap.Namespace)
+		err = r.replicate(ctx, source, secret.Namespace)
 		return ctrl.Result{}, err
 	}
 
-	targetNamespaces, err := r.targetNamespaces(ctx, &configMap)
+	targetNamespaces, err := r.targetNamespaces(ctx, &secret)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	for _, targetNamespace := range targetNamespaces {
-		if err := r.replicate(ctx, &configMap, targetNamespace.Name); err != nil {
+		if err := r.replicate(ctx, &secret, targetNamespace.Name); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -67,8 +67,8 @@ func (r *ConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return ctrl.Result{}, nil
 }
 
-func (r *ConfigMapReconciler) replicate(ctx context.Context, source client.Object, targetNamespace string) error {
-	replica := corev1.ConfigMap{
+func (r *SecretReconciler) replicate(ctx context.Context, source client.Object, targetNamespace string) error {
+	replica := corev1.Secret{
 		ObjectMeta: v1.ObjectMeta{
 			Name:       source.GetName(),
 			Namespace:  targetNamespace,
@@ -82,9 +82,8 @@ func (r *ConfigMapReconciler) replicate(ctx context.Context, source client.Objec
 	}
 
 	replica.Annotations = SetAnnotations(replica.GetAnnotations(), ReplicatorSourceAnnotation, fmt.Sprintf("%s/%s", source.GetNamespace(), source.GetName()))
-	replica.Immutable = source.(*corev1.ConfigMap).Immutable
-	replica.Data = source.(*corev1.ConfigMap).Data
-	replica.BinaryData = source.(*corev1.ConfigMap).BinaryData
+	replica.Immutable = source.(*corev1.Secret).Immutable
+	replica.Data = source.(*corev1.Secret).Data
 
 	if errors.IsNotFound(err) {
 		err = r.Create(ctx, &replica)
@@ -95,7 +94,7 @@ func (r *ConfigMapReconciler) replicate(ctx context.Context, source client.Objec
 	return err
 }
 
-func (r *ConfigMapReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *SecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	logger := log.FromContext(context.Background())
 
 	watchFn := predicate.Funcs{
@@ -133,7 +132,7 @@ func (r *ConfigMapReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&corev1.ConfigMap{}, builder.WithPredicates(
+		For(&corev1.Secret{}, builder.WithPredicates(
 			watchFn,
 		)).
 		//Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(

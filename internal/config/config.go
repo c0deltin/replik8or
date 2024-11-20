@@ -7,7 +7,7 @@ import (
 )
 
 type Config struct {
-	DisallowedNamespaces []string `env:"DISALLOWED_NAMESPACES,required"`
+	DisallowedNamespaces []string `env:"DISALLOWED_NAMESPACES"`
 }
 
 func Read() (*Config, error) {

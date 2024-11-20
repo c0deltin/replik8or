@@ -20,4 +20,4 @@ To be more precise ``replik8or.c0deltin.io/allowed-namespaces="<my-ns-1>,<anothe
 In this case the operator will only replicate the object into those namespaces.
 
 > [!IMPORTANT]   
-> The ``DISALLOWED_NAMESPACES`` will always beats any of the configured namespaces in the `allowed-namespaces` annotation. 
+> The ``disallowedNamespaces`` option will always beats any of the configured namespaces in the `allowed-namespaces` annotation. 

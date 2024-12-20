@@ -1,21 +1,21 @@
 package controller
 
 import (
-	"context"
-	"fmt"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
-	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"slices"
-	"strings"
+    "context"
+    "fmt"
+    "slices"
+    "strings"
 
-	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+    corev1 "k8s.io/api/core/v1"
+    k8serrors "k8s.io/apimachinery/pkg/api/errors"
+    "k8s.io/apimachinery/pkg/types"
+    ctrl "sigs.k8s.io/controller-runtime"
+    "sigs.k8s.io/controller-runtime/pkg/builder"
+    "sigs.k8s.io/controller-runtime/pkg/client"
+    "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+    "sigs.k8s.io/controller-runtime/pkg/event"
+    "sigs.k8s.io/controller-runtime/pkg/log"
+    "sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 const (
@@ -115,7 +115,7 @@ func (r *GenericReconciler[T]) createOrUpdate(ctx context.Context, source client
 		isCreation = true
 	}
 
-	r.copyFields(replica, source)
+	CopyFields(replica, source)
 
 	if isCreation {
 		return r.Create(ctx, replica)
@@ -123,27 +123,6 @@ func (r *GenericReconciler[T]) createOrUpdate(ctx context.Context, source client
 		return r.Update(ctx, replica)
 	}
 }
-
-func (r GenericReconciler[T]) copyFields(replica, source client.Object) {
-	switch v := replica.(type) {
-	case *corev1.Secret:
-		v.Annotations = SetAnnotations(replica.GetAnnotations(), ReplicatorSourceAnnotation, fmt.Sprintf("%s/%s", source.GetNamespace(), source.GetName()))
-		v.Immutable = source.(*corev1.Secret).Immutable
-		v.Data = source.(*corev1.Secret).Data
-	case *corev1.ConfigMap:
-		v.Annotations = SetAnnotations(replica.GetAnnotations(), ReplicatorSourceAnnotation, fmt.Sprintf("%s/%s", source.GetNamespace(), source.GetName()))
-		v.Immutable = source.(*corev1.ConfigMap).Immutable
-		v.Data = source.(*corev1.ConfigMap).Data
-		v.BinaryData = source.(*corev1.ConfigMap).BinaryData
-	}
-
-	finalizers := replica.GetFinalizers()
-	if !slices.Contains(finalizers, ReplicatorFinalizer) {
-		finalizers = append(finalizers, ReplicatorFinalizer)
-	}
-	replica.SetFinalizers(finalizers)
-}
-
 
 func (r *GenericReconciler[T]) targetNamespaces(ctx context.Context, obj client.Object) ([]corev1.Namespace, error) {
 	targetNS, err := r.allowedNamespaces(ctx, obj)
@@ -188,7 +167,6 @@ func (r *GenericReconciler[T]) allowedNamespaces(ctx context.Context, obj client
 	return namespaces, nil
 }
 
-
 func (r *GenericReconciler[T]) finalizeAndDelete(ctx context.Context, object T) (ctrl.Result, error) {
 	source, isReplica, err := r.isReplica(ctx, object)
 	if err != nil {
@@ -214,7 +192,7 @@ func (r *GenericReconciler[T]) finalizeAndDelete(ctx context.Context, object T) 
 	}
 
 	if isReplica && source != nil {
-		source.SetAnnotations(SetAnnotations(source.GetAnnotations(), ReplicateScheduleRequeue, "true"))
+		AddAnnotation(source, ReplicateScheduleRequeue, "true")
 		if err := r.Update(ctx, source); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -242,9 +220,8 @@ func (r *GenericReconciler[T]) deleteObject(ctx context.Context, object client.O
 	return r.Delete(ctx, replica)
 }
 
-
-func (r *GenericReconciler[T]) SetupWithManager(mgr ctrl.Manager) error {
-	logger := log.FromContext(context.Background())
+func (r *GenericReconciler[T]) SetupWithManager(mgr ctrl.Manager, name string) error {
+	logger := log.FromContext(context.Background()).WithName(name)
 
 	watchFn := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
@@ -281,8 +258,6 @@ func (r *GenericReconciler[T]) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&corev1.ConfigMap{}, builder.WithPredicates(
-			watchFn,
-		)).
+		For(&corev1.ConfigMap{}, builder.WithPredicates(watchFn)).
 		Complete(r)
 }

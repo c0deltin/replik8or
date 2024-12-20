@@ -140,14 +140,14 @@ func main() {
 	if err = (&controller.GenericReconciler[*corev1.Secret]{
         Client:              mgr.GetClient(),
         DisallowedNamespaces: cfg.DisallowedNamespaces,
-    }).SetupWithManager(mgr); err != nil {
+    }).SetupWithManager(mgr, "secret"); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Secret")
 		os.Exit(1)
 	}
 	if err = (&controller.GenericReconciler[*corev1.ConfigMap]{
         Client:              mgr.GetClient(),
         DisallowedNamespaces: cfg.DisallowedNamespaces,
-    }).SetupWithManager(mgr); err != nil {
+    }).SetupWithManager(mgr, "configmap"); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ConfigMap")
 		os.Exit(1)
 	}

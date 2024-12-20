@@ -3,7 +3,9 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	corev1 "k8s.io/api/core/v1"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/c0deltin/replikor/internal/config"
 	"github.com/c0deltin/replikor/internal/controller"
@@ -135,24 +137,21 @@ func main() {
 
 	// +kubebuilder:scaffold:builder
 
-	if err = (&controller.ConfigMapReconciler{
-		DefaultController: &controller.DefaultController{
-			Client:               mgr.GetClient(),
-			DisallowedNamespaces: cfg.DisallowedNamespaces,
-		},
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ConfigMap")
-		os.Exit(1)
-	}
-	if err = (&controller.SecretReconciler{
-		DefaultController: &controller.DefaultController{
-			Client:               mgr.GetClient(),
-			DisallowedNamespaces: cfg.DisallowedNamespaces,
-		},
-	}).SetupWithManager(mgr); err != nil {
+	if err = (&controller.GenericReconciler[*corev1.Secret]{
+        Client:              mgr.GetClient(),
+        DisallowedNamespaces: cfg.DisallowedNamespaces,
+    }).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Secret")
 		os.Exit(1)
 	}
+	if err = (&controller.GenericReconciler[*corev1.ConfigMap]{
+        Client:              mgr.GetClient(),
+        DisallowedNamespaces: cfg.DisallowedNamespaces,
+    }).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ConfigMap")
+		os.Exit(1)
+	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

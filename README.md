@@ -10,7 +10,7 @@ The project is heavily inspired by [emberstack/kubernetes-reflector](https://git
 ### Configuration
 
 The following helm values are available (`replik8or.envs`):
-- ``disallowedNamespaces`` (optional) define namespaces (coma-seperated) that should be excluded from the operator.
+- ``disallowedNamespaces`` (optional) define namespaces (comma-seperated) that should be excluded from the operator.
 
 ## Usage
 
@@ -20,4 +20,4 @@ To be more precise ``replik8or.c0deltin.io/allowed-namespaces="<my-ns-1>,<anothe
 In this case the operator will only replicate the object into those namespaces.
 
 > [!IMPORTANT]   
-> The ``disallowedNamespaces`` option will always beats any of the configured namespaces in the `allowed-namespaces` annotation. 
+> The ``disallowedNamespaces`` option will always beat any of the configured namespaces in the `allowed-namespaces` annotation. 

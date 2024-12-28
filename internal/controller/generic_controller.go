@@ -1,29 +1,21 @@
 package controller
 
 import (
-    "context"
-    "fmt"
-    "slices"
-    "strings"
+	"context"
+	"fmt"
+	"slices"
+	"strings"
 
-    corev1 "k8s.io/api/core/v1"
-    k8serrors "k8s.io/apimachinery/pkg/api/errors"
-    "k8s.io/apimachinery/pkg/types"
-    ctrl "sigs.k8s.io/controller-runtime"
-    "sigs.k8s.io/controller-runtime/pkg/builder"
-    "sigs.k8s.io/controller-runtime/pkg/client"
-    "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-    "sigs.k8s.io/controller-runtime/pkg/event"
-    "sigs.k8s.io/controller-runtime/pkg/log"
-    "sigs.k8s.io/controller-runtime/pkg/predicate"
-)
-
-const (
-	ReplicatorFinalizer                   = "c0deltin.io/replik8or"
-	ReplicatorAllowedAnnotation           = "replik8or.c0deltin.io/reflection-allowed"
-	ReplicatorAllowedNamespacesAnnotation = "replik8or.c0deltin.io/allowed-namespaces"
-	ReplicatorSourceAnnotation            = "replik8or.c0deltin.io/replica-of"
-	ReplicateScheduleRequeue              = "replik8or.c0deltin.io/schedule-requeue"
+	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 type GenericReconciler[T client.Object] struct {
@@ -105,7 +97,7 @@ func (r *GenericReconciler[T]) isReplica(ctx context.Context, obj client.Object)
 
 func (r *GenericReconciler[T]) createOrUpdate(ctx context.Context, source client.Object, targetNamespace string) error {
 	var (
-		replica T
+		replica    T
 		isCreation bool
 	)
 	if err := r.Get(ctx, types.NamespacedName{Name: source.GetName(), Namespace: targetNamespace}, replica); err != nil {
@@ -115,7 +107,7 @@ func (r *GenericReconciler[T]) createOrUpdate(ctx context.Context, source client
 		isCreation = true
 	}
 
-	CopyFields(replica, source)
+	CopyFields(source, replica)
 
 	if isCreation {
 		return r.Create(ctx, replica)

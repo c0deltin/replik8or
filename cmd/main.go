@@ -3,18 +3,12 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	corev1 "k8s.io/api/core/v1"
 	"os"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/c0deltin/replikor/internal/config"
-	"github.com/c0deltin/replikor/internal/controller"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-
-	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
-	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -22,6 +16,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+
+	"github.com/c0deltin/replikor/internal/config"
+	"github.com/c0deltin/replikor/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -138,16 +135,16 @@ func main() {
 	// +kubebuilder:scaffold:builder
 
 	if err = (&controller.GenericReconciler[*corev1.Secret]{
-        Client:              mgr.GetClient(),
-        DisallowedNamespaces: cfg.DisallowedNamespaces,
-    }).SetupWithManager(mgr, "secret"); err != nil {
+		Client:               mgr.GetClient(),
+		DisallowedNamespaces: cfg.DisallowedNamespaces,
+	}).SetupWithManager(mgr, "secret"); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Secret")
 		os.Exit(1)
 	}
 	if err = (&controller.GenericReconciler[*corev1.ConfigMap]{
-        Client:              mgr.GetClient(),
-        DisallowedNamespaces: cfg.DisallowedNamespaces,
-    }).SetupWithManager(mgr, "configmap"); err != nil {
+		Client:               mgr.GetClient(),
+		DisallowedNamespaces: cfg.DisallowedNamespaces,
+	}).SetupWithManager(mgr, "configmap"); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ConfigMap")
 		os.Exit(1)
 	}

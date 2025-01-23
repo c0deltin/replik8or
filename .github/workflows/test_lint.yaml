@@ -26,7 +26,8 @@ jobs:
           go-version: '~1.23'
 
       - name: Run tests
-        scripts: make test
+        shell: bash
+        run: make test
 
   lint:
     name: Linting Code

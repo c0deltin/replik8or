@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/c0deltin/replikor/internal/utils"
 )
@@ -92,4 +93,28 @@ func TestCopyFields(t *testing.T) {
 		assert.Equal(t, source.Data, replica.Data)
 		assert.Equal(t, source.BinaryData, replica.BinaryData)
 	})
+}
+
+func TestIgnoreSecretType(t *testing.T) {
+	type testCase struct {
+		name     string
+		object   client.Object
+		expected bool
+	}
+
+	ignoreTypes := []string{string(corev1.SecretTypeServiceAccountToken)}
+
+	tt := []testCase{
+		{name: "object is not a secret", object: &corev1.ConfigMap{}, expected: false},
+		{name: "secret type is not ignored", object: &corev1.Secret{Type: corev1.SecretTypeOpaque}, expected: false},
+		{name: "secret type is ignored", object: &corev1.Secret{Type: corev1.SecretTypeServiceAccountToken}, expected: true},
+	}
+
+	for _, tcase := range tt {
+		t.Run(tcase.name, func(t *testing.T) {
+			actual := IsSecretType(tcase.object, ignoreTypes)
+
+			assert.Equal(t, tcase.expected, actual)
+		})
+	}
 }

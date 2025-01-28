@@ -16,6 +16,7 @@ const (
 	ReplicateScheduleRequeue              = "replik8or.c0deltin.io/schedule-requeue"
 )
 
+// AddAnnotation adds an annotation to an object.
 func AddAnnotation(object client.Object, key, value string) {
 	annotations := object.GetAnnotations()
 	if annotations == nil {
@@ -25,6 +26,7 @@ func AddAnnotation(object client.Object, key, value string) {
 	object.SetAnnotations(annotations)
 }
 
+// CopyFields copy fields of source to replica object.
 func CopyFields(source, replica client.Object) {
 	switch v := replica.(type) {
 	case *corev1.Secret:
@@ -42,4 +44,14 @@ func CopyFields(source, replica client.Object) {
 		finalizers = append(finalizers, ReplicatorFinalizer)
 	}
 	replica.SetFinalizers(finalizers)
+}
+
+// IsSecretType will return true if the object is of type corev1.Secret and the type of the secret is in the provided types.
+func IsSecretType(object client.Object, types []string) bool {
+	v, ok := object.(*corev1.Secret)
+	if !ok {
+		return false
+	}
+
+	return slices.Contains(types, string(v.Type))
 }

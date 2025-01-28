@@ -11,7 +11,15 @@ The project is heavily inspired by [emberstack/kubernetes-reflector](https://git
 
 The following helm values are available (`replik8or.envs`):
 - ``disallowed_namespaces`` (optional) define namespaces (comma-seperated) that should be excluded from the operator.
-- ``ignore_secret_types`` (optional) set a list of Kubernetes secret types that should be ignored for replication.
+
+#### Example
+```yaml
+replik8or:
+  envs:
+    disallowed_namespaces:
+      - slytherin
+      - gryffindor
+```
 
 ## Usage
 

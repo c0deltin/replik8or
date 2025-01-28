@@ -30,10 +30,6 @@ func (r *GenericReconciler[T]) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if IsSecretType(object, config.StrSlice("ignore_secret_types")) {
-		return ctrl.Result{}, nil
-	}
-
 	if _, ok := object.GetAnnotations()[ReplicateScheduleRequeue]; ok {
 		delete(object.GetAnnotations(), ReplicateScheduleRequeue)
 		return ctrl.Result{}, fmt.Errorf("updating, remove annotation %s: %w ", ReplicateScheduleRequeue, r.Update(ctx, object))

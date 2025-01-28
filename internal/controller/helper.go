@@ -45,13 +45,3 @@ func CopyFields(source, replica client.Object) {
 	}
 	replica.SetFinalizers(finalizers)
 }
-
-// IsSecretType will return true if the object is of type corev1.Secret and the type of the secret is in the provided types.
-func IsSecretType(object client.Object, types []string) bool {
-	v, ok := object.(*corev1.Secret)
-	if !ok {
-		return false
-	}
-
-	return slices.Contains(types, string(v.Type))
-}

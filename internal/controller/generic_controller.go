@@ -16,23 +16,27 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+
+	"github.com/c0deltin/replikor/internal/config"
 )
 
 type GenericReconciler[T client.Object] struct {
 	client.Client
-
-	DisallowedNamespaces []string
 }
 
 func (r *GenericReconciler[T]) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var object T
+	object := r.makeEmptyObject()
 	if err := r.Get(ctx, req.NamespacedName, object); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	if IsSecretType(object, config.StrSlice("ignore_secret_types")) {
+		return ctrl.Result{}, nil
+	}
+
 	if _, ok := object.GetAnnotations()[ReplicateScheduleRequeue]; ok {
 		delete(object.GetAnnotations(), ReplicateScheduleRequeue)
-		return ctrl.Result{}, r.Update(ctx, object)
+		return ctrl.Result{}, fmt.Errorf("updating, remove annotation %s: %w ", ReplicateScheduleRequeue, r.Update(ctx, object))
 	}
 
 	if !object.GetDeletionTimestamp().IsZero() {
@@ -49,7 +53,20 @@ func (r *GenericReconciler[T]) Reconcile(ctx context.Context, req ctrl.Request) 
 	return r.reconcile(ctx, object)
 }
 
-func (r *GenericReconciler[T]) reconcile(ctx context.Context, object T) (ctrl.Result, error) {
+func (r *GenericReconciler[T]) makeEmptyObject() client.Object {
+	var e T
+	var obj client.Object = e
+
+	switch obj.(type) {
+	case *corev1.Secret:
+		obj = new(corev1.Secret)
+	case *corev1.ConfigMap:
+		obj = new(corev1.ConfigMap)
+	}
+	return obj
+}
+
+func (r *GenericReconciler[T]) reconcile(ctx context.Context, object client.Object) (ctrl.Result, error) {
 	source, isReplica, err := r.isReplica(ctx, object)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -96,24 +113,31 @@ func (r *GenericReconciler[T]) isReplica(ctx context.Context, obj client.Object)
 }
 
 func (r *GenericReconciler[T]) createOrUpdate(ctx context.Context, source client.Object, targetNamespace string) error {
-	var (
-		replica    T
-		isCreation bool
-	)
-	if err := r.Get(ctx, types.NamespacedName{Name: source.GetName(), Namespace: targetNamespace}, replica); err != nil {
+	replica := r.makeEmptyObject()
+	replica.SetName(source.GetName())
+	replica.SetNamespace(targetNamespace)
+
+	var found bool
+	if err := r.Get(ctx, types.NamespacedName{Name: replica.GetName(), Namespace: replica.GetNamespace()}, replica); err != nil {
 		if !k8serrors.IsNotFound(err) {
 			return err
 		}
-		isCreation = true
+		found = true
 	}
 
 	CopyFields(source, replica)
 
-	if isCreation {
-		return r.Create(ctx, replica)
+	var err error
+	if found {
+		err = r.Create(ctx, replica)
 	} else {
-		return r.Update(ctx, replica)
+		err = r.Update(ctx, replica)
 	}
+
+	if err != nil {
+		return fmt.Errorf("found / update replica %s (source: %s) in namespace %s: %w", source.GetName(), replica.GetName(), replica.GetNamespace(), err)
+	}
+	return nil
 }
 
 func (r *GenericReconciler[T]) targetNamespaces(ctx context.Context, obj client.Object) ([]corev1.Namespace, error) {
@@ -131,7 +155,7 @@ func (r *GenericReconciler[T]) targetNamespaces(ctx context.Context, obj client.
 	}
 
 	for _, ns := range namespaces.Items {
-		if ns.Name != obj.GetNamespace() && !slices.Contains(r.DisallowedNamespaces, ns.Name) {
+		if ns.Name != obj.GetNamespace() && !slices.Contains(config.StrSlice("disallowed_namespaces"), ns.Name) {
 			targetNS = append(targetNS, ns)
 		}
 	}
@@ -147,7 +171,7 @@ func (r *GenericReconciler[T]) allowedNamespaces(ctx context.Context, obj client
 
 	var namespaces []corev1.Namespace
 	for _, ns := range strings.Split(v, ",") {
-		if ns != obj.GetNamespace() && !slices.Contains(r.DisallowedNamespaces, ns) {
+		if ns != obj.GetNamespace() && !slices.Contains(config.StrSlice("disallowed_namespaces"), ns) {
 			var namespace corev1.Namespace
 			if err := r.Get(ctx, types.NamespacedName{Name: ns}, &namespace); err != nil {
 				return nil, err
@@ -159,7 +183,7 @@ func (r *GenericReconciler[T]) allowedNamespaces(ctx context.Context, obj client
 	return namespaces, nil
 }
 
-func (r *GenericReconciler[T]) finalizeAndDelete(ctx context.Context, object T) (ctrl.Result, error) {
+func (r *GenericReconciler[T]) finalizeAndDelete(ctx context.Context, object client.Object) (ctrl.Result, error) {
 	source, isReplica, err := r.isReplica(ctx, object)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -250,6 +274,6 @@ func (r *GenericReconciler[T]) SetupWithManager(mgr ctrl.Manager, name string) e
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&corev1.ConfigMap{}, builder.WithPredicates(watchFn)).
+		For(r.makeEmptyObject(), builder.WithPredicates(watchFn)).
 		Complete(r)
 }

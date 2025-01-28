@@ -1,20 +1,30 @@
 package config
 
 import (
-	"context"
+	"strings"
 
-	"github.com/sethvargo/go-envconfig"
+	"github.com/knadh/koanf/parsers/yaml"
+	"github.com/knadh/koanf/providers/env"
+	"github.com/knadh/koanf/providers/file"
+	"github.com/knadh/koanf/v2"
 )
 
-type Config struct {
-	DisallowedNamespaces []string `env:"DISALLOWED_NAMESPACES"`
-}
+var k = koanf.New(".")
 
-func Read() (*Config, error) {
-	var c Config
-	if err := envconfig.Process(context.Background(), &c); err != nil {
-		return nil, err
+func Read() error {
+	if err := k.Load(file.Provider("replik8or.yaml"), yaml.Parser()); err != nil {
+		return err
 	}
 
-	return &c, nil
+	return k.Load(env.Provider("REPLIK8OR_", ".", func(s string) string {
+		return strings.ToLower(strings.TrimPrefix(s, "REPLIK8OR_"))
+	}), nil)
+}
+
+func String(key string) string {
+	return k.String(key)
+}
+
+func StrSlice(key string) []string {
+	return k.Strings(key)
 }

@@ -59,8 +59,7 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	cfg, err := config.Read()
-	if err != nil {
+	if err := config.Read(); err != nil {
 		setupLog.Error(err, "unable to set up client config")
 		os.Exit(1)
 	}
@@ -135,15 +134,13 @@ func main() {
 	// +kubebuilder:scaffold:builder
 
 	if err = (&controller.GenericReconciler[*corev1.Secret]{
-		Client:               mgr.GetClient(),
-		DisallowedNamespaces: cfg.DisallowedNamespaces,
+		Client: mgr.GetClient(),
 	}).SetupWithManager(mgr, "secret"); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Secret")
 		os.Exit(1)
 	}
 	if err = (&controller.GenericReconciler[*corev1.ConfigMap]{
-		Client:               mgr.GetClient(),
-		DisallowedNamespaces: cfg.DisallowedNamespaces,
+		Client: mgr.GetClient(),
 	}).SetupWithManager(mgr, "configmap"); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ConfigMap")
 		os.Exit(1)

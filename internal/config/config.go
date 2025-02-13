@@ -9,22 +9,20 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
-var k = koanf.New(".")
+var _k = koanf.New(".")
 
-func Read() error {
-	if err := k.Load(file.Provider("replik8or.yaml"), yaml.Parser()); err != nil {
-		return err
-	}
+func Read() {
+	_ = _k.Load(file.Provider("replik8or.yaml"), yaml.Parser())
 
-	return k.Load(env.Provider("REPLIK8OR_", ".", func(s string) string {
-		return strings.ToLower(strings.TrimPrefix(s, "REPLIK8OR_"))
+	_ = _k.Load(env.ProviderWithValue("REPLIK8OR_", ".", func(s, v string) (string, any) {
+		s = strings.ToLower(strings.TrimPrefix(s, "REPLIK8OR_"))
+		if strings.Contains(v, ",") {
+			return s, strings.Split(v, ",")
+		}
+		return s, v
 	}), nil)
 }
 
-func String(key string) string {
-	return k.String(key)
-}
-
 func StrSlice(key string) []string {
-	return k.Strings(key)
+	return _k.Strings(key)
 }

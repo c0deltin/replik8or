@@ -9,13 +9,13 @@ The project is heavily inspired by [emberstack/kubernetes-reflector](https://git
 
 ### Configuration
 
-The following helm values are available (`replik8or.envs`):
+The following helm values are available (`replik8or.config`):
 - ``disallowed_namespaces`` (optional) define namespaces (comma-seperated) that should be excluded from the operator.
 
 #### Example
 ```yaml
 replik8or:
-  envs:
+  config:
     disallowed_namespaces:
       - slytherin
       - gryffindor

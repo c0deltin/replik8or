@@ -45,3 +45,15 @@ func CopyFields(source, replica client.Object) {
 	}
 	replica.SetFinalizers(finalizers)
 }
+
+// HasAnnotation checks if the object's annotations against the provided annotations.
+// It will return true on the first match.
+func HasAnnotation(object client.Object, annotations ...string) bool {
+	objAnnotations := object.GetAnnotations()
+	for _, annotation := range annotations {
+		if _, ok := objAnnotations[annotation]; ok {
+			return ok
+		}
+	}
+	return false
+}

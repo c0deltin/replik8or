@@ -25,44 +25,38 @@ type GenericReconciler[T client.Object] struct {
 }
 
 func (r *GenericReconciler[T]) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	lgr := log.FromContext(ctx)
+
+	lgr.Info("reconciling object")
+
 	object := r.makeEmptyObject()
 	if err := r.Get(ctx, req.NamespacedName, object); err != nil {
+		lgr.Error(err, "failed to fetch object")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	if _, ok := object.GetAnnotations()[ReplicateScheduleRequeue]; ok {
 		delete(object.GetAnnotations(), ReplicateScheduleRequeue)
-		return ctrl.Result{}, fmt.Errorf("updating, remove annotation %s: %w ", ReplicateScheduleRequeue, r.Update(ctx, object))
+		if err := r.Update(ctx, object); err != nil {
+			return ctrl.Result{}, fmt.Errorf("updating, remove annotation %s: %w ", ReplicateScheduleRequeue, err)
+		}
+		return ctrl.Result{}, nil
 	}
 
 	if !object.GetDeletionTimestamp().IsZero() {
+		lgr.Info("object is marked for deletion, starting delete routine")
 		return r.finalizeAndDelete(ctx, object)
 	}
 
 	if controllerutil.AddFinalizer(object, ReplicatorFinalizer) {
+		lgr.Info("adding finalizer to oject")
 		if err := r.Update(ctx, object); err != nil {
+			lgr.Error(err, "failed to add finalizer to object")
 			return ctrl.Result{}, fmt.Errorf("adding finalizer: %w", err)
 		}
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	return r.reconcile(ctx, object)
-}
-
-func (r *GenericReconciler[T]) makeEmptyObject() client.Object {
-	var e T
-	var obj client.Object = e
-
-	switch obj.(type) {
-	case *corev1.Secret:
-		obj = new(corev1.Secret)
-	case *corev1.ConfigMap:
-		obj = new(corev1.ConfigMap)
-	}
-	return obj
-}
-
-func (r *GenericReconciler[T]) reconcile(ctx context.Context, object client.Object) (ctrl.Result, error) {
 	source, isReplica, err := r.isReplica(ctx, object)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -86,6 +80,7 @@ func (r *GenericReconciler[T]) reconcile(ctx context.Context, object client.Obje
 	return ctrl.Result{}, nil
 }
 
+// isReplica determines if the current reconciled object is a replica.
 func (r *GenericReconciler[T]) isReplica(ctx context.Context, obj client.Object) (client.Object, bool, error) {
 	v, ok := obj.GetAnnotations()[ReplicatorSourceAnnotation]
 	if !ok {
@@ -108,6 +103,7 @@ func (r *GenericReconciler[T]) isReplica(ctx context.Context, obj client.Object)
 	return &source, true, nil
 }
 
+// createOrUpdate will create or update the replica of the source object.
 func (r *GenericReconciler[T]) createOrUpdate(ctx context.Context, source client.Object, targetNamespace string) error {
 	replica := r.makeEmptyObject()
 	replica.SetName(source.GetName())
@@ -136,6 +132,7 @@ func (r *GenericReconciler[T]) createOrUpdate(ctx context.Context, source client
 	return nil
 }
 
+// targetNamespaces creates a list of namespaces in which the source object should be replicated.
 func (r *GenericReconciler[T]) targetNamespaces(ctx context.Context, obj client.Object) ([]corev1.Namespace, error) {
 	targetNS, err := r.allowedNamespaces(ctx, obj)
 	if err != nil {
@@ -159,6 +156,7 @@ func (r *GenericReconciler[T]) targetNamespaces(ctx context.Context, obj client.
 	return targetNS, nil
 }
 
+// allowedNamespaces returns a list of namespaces that are allowed for replications.
 func (r *GenericReconciler[T]) allowedNamespaces(ctx context.Context, obj client.Object) ([]corev1.Namespace, error) {
 	v, ok := obj.GetAnnotations()[ReplicatorAllowedNamespacesAnnotation]
 	if !ok {
@@ -179,6 +177,7 @@ func (r *GenericReconciler[T]) allowedNamespaces(ctx context.Context, obj client
 	return namespaces, nil
 }
 
+// finalizeAndDelete will remove all replicas and then remove the finalizer from the source object.
 func (r *GenericReconciler[T]) finalizeAndDelete(ctx context.Context, object client.Object) (ctrl.Result, error) {
 	source, isReplica, err := r.isReplica(ctx, object)
 	if err != nil {
@@ -213,15 +212,9 @@ func (r *GenericReconciler[T]) finalizeAndDelete(ctx context.Context, object cli
 	return ctrl.Result{}, nil
 }
 
+// deleteObject fetches and delete an object.
 func (r *GenericReconciler[T]) deleteObject(ctx context.Context, object client.Object, namespace string) error {
-	var replica client.Object
-	switch object.(type) {
-	case *corev1.Secret:
-		replica = &corev1.Secret{}
-	case *corev1.ConfigMap:
-		replica = &corev1.ConfigMap{}
-	}
-
+	replica := r.makeEmptyObject()
 	if err := r.Get(ctx, types.NamespacedName{Name: object.GetName(), Namespace: namespace}, replica); err != nil {
 		if k8serrors.IsNotFound(err) {
 			return nil
@@ -232,40 +225,30 @@ func (r *GenericReconciler[T]) deleteObject(ctx context.Context, object client.O
 	return r.Delete(ctx, replica)
 }
 
-func (r *GenericReconciler[T]) SetupWithManager(mgr ctrl.Manager, name string) error {
-	logger := log.FromContext(context.Background()).WithName(name)
+// makeEmptyObject returns an instance of T which is currently either corev1.Secret or corev1.ConfigMap.
+func (r *GenericReconciler[T]) makeEmptyObject() client.Object {
+	var e T
+	var obj client.Object = e
 
+	switch obj.(type) {
+	case *corev1.Secret:
+		obj = new(corev1.Secret)
+	case *corev1.ConfigMap:
+		obj = new(corev1.ConfigMap)
+	}
+	return obj
+}
+
+func (r *GenericReconciler[T]) SetupWithManager(mgr ctrl.Manager) error {
 	watchFn := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
-			_, ok := e.Object.GetAnnotations()[ReplicatorAllowedAnnotation]
-			if ok {
-				logger.Info("CREATED", "name", e.Object.GetName(), "namespace", e.Object.GetNamespace())
-			}
-			return ok
+			return HasAnnotation(e.Object, ReplicatorAllowedAnnotation)
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			_, ok := e.Object.GetAnnotations()[ReplicatorAllowedAnnotation]
-			if ok {
-				logger.Info("DELETED", "name", e.Object.GetName(), "namespace", e.Object.GetNamespace())
-				return true
-			}
-			_, ok = e.Object.GetAnnotations()[ReplicatorSourceAnnotation]
-			if ok {
-				logger.Info("DELETED", "name", e.Object.GetName(), "namespace", e.Object.GetNamespace())
-			}
-			return ok
+			return HasAnnotation(e.Object, ReplicatorAllowedAnnotation, ReplicatorSourceAnnotation)
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			_, ok := e.ObjectNew.GetAnnotations()[ReplicatorAllowedAnnotation]
-			if ok {
-				logger.Info("UPDATED", "name", e.ObjectNew.GetName(), "namespace", e.ObjectNew.GetNamespace())
-				return true
-			}
-			_, ok = e.ObjectNew.GetAnnotations()[ReplicatorSourceAnnotation]
-			if ok {
-				logger.Info("UPDATED", "name", e.ObjectNew.GetName(), "namespace", e.ObjectNew.GetNamespace())
-			}
-			return ok
+			return HasAnnotation(e.ObjectNew, ReplicatorAllowedAnnotation, ReplicatorSourceAnnotation)
 		},
 	}
 

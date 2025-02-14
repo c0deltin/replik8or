@@ -31,15 +31,13 @@ var _ = Describe("GenericController corev1.Secret", Serial, Ordered, func() {
 	)
 
 	Context("When a new resource is created", func() {
-		BeforeAll(func() {
+		It("should successfully replicate the secret in all namespaces", func() {
 			By("create namespaces to replicate")
 			for _, ns := range targetNamespaces {
 				err := k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}})
 				Expect(client.IgnoreAlreadyExists(err)).NotTo(HaveOccurred())
 			}
-		})
 
-		It("should successfully replicate the secret in all namespaces", func() {
 			By("creating a new secret")
 			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 
@@ -162,16 +160,86 @@ var _ = Describe("GenericController corev1.Secret", Serial, Ordered, func() {
 			By("deleting the source object")
 			Expect(k8sClient.Delete(ctx, secret)).To(Succeed())
 
-			Eventually(func() error {
-				for _, ns := range targetNamespaces {
+			for _, ns := range targetNamespaces {
+				Eventually(func() error {
 					var replica corev1.Secret
 					err := k8sClient.Get(ctx, types.NamespacedName{Name: secret.Name, Namespace: ns}, &replica)
 					if err == nil || !apierrors.IsNotFound(err) {
 						return fmt.Errorf("replica found or internal err: %w", err)
 					}
+					return nil
+				}).ShouldNot(HaveOccurred())
+			}
+		})
+	})
+	Context("When a new resource with allowed-namespaces annotations is created", func() {
+		It("should replicate only in the specified namespaces", func() {
+			secretWithAnnotation := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "a-secret-with-annotation",
+					Namespace: "ravenclaw",
+					Annotations: map[string]string{
+						ReplicatorAllowedAnnotation:           "true",
+						ReplicatorAllowedNamespacesAnnotation: "gryffindor,slytherin",
+					},
+				},
+				Data: map[string][]byte{
+					"foo": []byte("bar"),
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, secretWithAnnotation)).To(Succeed())
+
+			for ns, shouldExist := range map[string]bool{"default": false, "hufflepuff": false, "gryffindor": true, "slytherin": true} {
+				Eventually(func() error {
+					var replica corev1.Secret
+					err := k8sClient.Get(ctx, types.NamespacedName{Name: secretWithAnnotation.Name, Namespace: ns}, &replica)
+					if shouldExist && err != nil {
+						return fmt.Errorf("replica of %s/%s does not exist (but should) in namespace %s: %w",
+							secretWithAnnotation.Namespace, secretWithAnnotation.Name, ns, err)
+					} else if !shouldExist && !apierrors.IsNotFound(err) {
+						return fmt.Errorf("replica of %s/%s exist (but should not) in namespace %s: %w",
+							secretWithAnnotation.Namespace, secretWithAnnotation.Name, ns, err)
+					}
+
+					return nil
+				}).ShouldNot(HaveOccurred())
+			}
+		})
+	})
+	Context("When a resource is created without any annotation", func() {
+		It("should not be reconciled in any namespace", func() {
+			secretWithoutAnnotation := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "just-a-secret",
+					Namespace: "ravenclaw",
+				},
+				Data: map[string][]byte{
+					"foo": []byte("bar"),
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, secretWithoutAnnotation)).To(Succeed())
+
+			var namespaces corev1.NamespaceList
+			Expect(k8sClient.List(ctx, &namespaces)).To(Succeed())
+
+			for _, ns := range namespaces.Items {
+				if ns.Name == secretWithoutAnnotation.Namespace {
+					continue
 				}
-				return nil
-			}).ShouldNot(HaveOccurred())
+
+				Eventually(func() error {
+					var replica corev1.Secret
+					err := k8sClient.Get(ctx, types.NamespacedName{Name: secretWithoutAnnotation.Name, Namespace: ns.Name}, &replica)
+					if apierrors.IsNotFound(err) {
+						return nil
+					}
+
+					return fmt.Errorf("a replica of %s/%s exist but shouldn't in namespace %s: %w",
+						secretWithoutAnnotation.Namespace, secretWithoutAnnotation.Name, ns.Name, err)
+				}).ShouldNot(HaveOccurred())
+			}
 		})
 	})
 })

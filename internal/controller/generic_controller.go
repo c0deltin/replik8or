@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/c0deltin/replikor/internal/config"
@@ -25,7 +25,7 @@ type GenericReconciler[T client.Object] struct {
 }
 
 func (r *GenericReconciler[T]) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	lgr := log.FromContext(ctx)
+	lgr := logf.FromContext(ctx)
 
 	lgr.Info("reconciling object")
 

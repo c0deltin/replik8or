@@ -93,3 +93,22 @@ func TestCopyFields(t *testing.T) {
 		assert.Equal(t, source.BinaryData, replica.BinaryData)
 	})
 }
+
+func TestHasAnnotation(t *testing.T) {
+	obj := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "source-object",
+			Namespace: "default",
+			Annotations: map[string]string{
+				"foo": "bar",
+			},
+		},
+	}
+
+	t.Run("matching annotation", func(t *testing.T) {
+		assert.True(t, HasAnnotation(obj, "foo"))
+	})
+	t.Run("no matching annotation", func(t *testing.T) {
+		assert.False(t, HasAnnotation(obj, "baz"))
+	})
+}

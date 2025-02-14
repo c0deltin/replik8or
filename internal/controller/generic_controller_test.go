@@ -141,7 +141,7 @@ var _ = Describe("GenericController corev1.Secret", Serial, Ordered, func() {
 					return fmt.Errorf("fetching replica: %w", err)
 				}
 
-				// fetching source object for data comparsion
+				// fetching source object for data comparison
 				var source corev1.Secret
 				if err := k8sClient.Get(ctx, types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, &source); err != nil {
 					return fmt.Errorf("fetching source object: %w", err)

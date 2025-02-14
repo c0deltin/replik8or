@@ -34,12 +34,12 @@ func init() {
 
 func main() {
 	var (
-		metricsAddr string
+		metricsAddr          string
 		enableLeaderElection bool
-		probeAddr string
-		secureMetrics bool
-		enableHTTP2 bool
-		tlsOpts []func(*tls.Config)
+		probeAddr            string
+		secureMetrics        bool
+		enableHTTP2          bool
+		tlsOpts              []func(*tls.Config)
 	)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -145,7 +145,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	//+kubebuilder:scaffold:builder
+	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")

@@ -1,28 +1,49 @@
 package config
 
 import (
+	"flag"
 	"strings"
 
-	"github.com/knadh/koanf/parsers/yaml"
-	"github.com/knadh/koanf/providers/env"
-	"github.com/knadh/koanf/providers/file"
-	"github.com/knadh/koanf/v2"
+	"github.com/go-viper/mapstructure/v2"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
-var _k = koanf.New(".")
-
-func Read() {
-	_ = _k.Load(file.Provider("replik8or.yaml"), yaml.Parser())
-
-	_ = _k.Load(env.ProviderWithValue("REPLIK8OR_", ".", func(s, v string) (string, any) {
-		s = strings.ToLower(strings.TrimPrefix(s, "REPLIK8OR_"))
-		if strings.Contains(v, ",") {
-			return s, strings.Split(v, ",")
-		}
-		return s, v
-	}), nil)
+type Config struct {
+	MetricsAddress       string   `mapstructure:"METRICS_ADDR"`
+	HealthProbeAddress   string   `mapstructure:"HEALTH_PROBE_ADDR"`
+	DisallowedNamespaces []string `mapstructure:"DISALLOWED_NAMESPACES"`
 }
 
-func StrSlice(key string) []string {
-	return _k.Strings(key)
+var replacer = strings.NewReplacer("-", "_")
+
+func Read() (*Config, error) {
+	viper.SetEnvKeyReplacer(replacer)
+	viper.AutomaticEnv()
+
+	flag.String("metrics-addr", "0", "The address the metric endpoint binds to. (default 0 = disabled)")
+	flag.String("health-probe-addr", "0", "The address the health probe binds to. (default 0 = disabled)")
+	flag.String("disallowed-namespaces", "", "A list (comma separated) of namespaces that are disallowed.")
+
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	pflag.Parse()
+
+	err := viper.BindPFlags(pflag.CommandLine)
+	if err != nil {
+		return nil, err
+	}
+
+	var cfg Config
+	if err := viper.Unmarshal(&cfg, decoder); err != nil {
+		return nil, err
+	}
+
+	return &cfg, nil
+}
+
+func decoder(dc *mapstructure.DecoderConfig) {
+	dc.MatchName = func(mapKey, fieldName string) bool {
+		snakeCase := replacer.Replace(mapKey)
+		return strings.ToUpper(snakeCase) == fieldName
+	}
 }

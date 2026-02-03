@@ -16,7 +16,7 @@ import (
 
 var _ = Describe("SourceReconciler reconciles corev1.ConfigMap", Ordered, func() {
 	Context("when a new ConfigMap is created", func() {
-		By("creating replica namespaces and source object")
+		// creating replica namespaces and source object
 		BeforeAll(func() {
 			By("creating namespaces")
 			for _, ns := range replicaNamespaces {

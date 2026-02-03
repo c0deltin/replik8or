@@ -2,6 +2,7 @@ package source
 
 import (
 	"reflect"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -13,10 +14,10 @@ import (
 	"github.com/c0deltin/replik8or/internal/replicator"
 )
 
-var _ = Describe("SourceReconciler reconciles corev1.ConfigMap", func() {
+var _ = Describe("SourceReconciler reconciles corev1.ConfigMap", Ordered, func() {
 	Context("when a new ConfigMap is created", func() {
-
-		BeforeEach(func() {
+		// creating replica namespaces and source object
+		BeforeAll(func() {
 			By("creating namespaces")
 			for _, ns := range replicaNamespaces {
 				namespace := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}}
@@ -26,21 +27,8 @@ var _ = Describe("SourceReconciler reconciles corev1.ConfigMap", func() {
 			}
 
 			By("creating source ConfigMap")
-			Expect(k8sClient.Create(ctx, sourceConfigMap)).To(Succeed())
-		})
-
-		AfterEach(func() {
-			By("deleting all namespaces")
-			for _, ns := range append(replicaNamespaces, newNamespace) {
-				var namespace corev1.Namespace
-				if err := k8sClient.Get(ctx, ctrlclient.ObjectKey{Name: ns}, &namespace); err != nil {
-					Expect(ctrlclient.IgnoreNotFound(err)).To(Succeed())
-				}
-
-				if err := k8sClient.Delete(ctx, &namespace); err != nil {
-					Expect(ctrlclient.IgnoreNotFound(err)).To(Succeed())
-				}
-			}
+			source := sourceConfigMap.DeepCopy()
+			Expect(ctrlclient.IgnoreAlreadyExists(k8sClient.Create(ctx, source))).To(Succeed())
 		})
 
 		It("should be replicated in all namespaces", func() {
@@ -54,7 +42,7 @@ var _ = Describe("SourceReconciler reconciles corev1.ConfigMap", func() {
 				g.Expect(err).NotTo(HaveOccurred())
 
 				g.Expect(replicaList.Items).To(HaveLen(len(replicaNamespaces)))
-			}).Should(Succeed())
+			}).WithTimeout(5 * time.Second).WithPolling(100 * time.Millisecond).Should(Succeed())
 
 			By("ensuring no replica was created in disallowed namespaces")
 			Eventually(func(g Gomega) {
@@ -67,17 +55,28 @@ var _ = Describe("SourceReconciler reconciles corev1.ConfigMap", func() {
 		})
 
 		It("should recreate a replica when it was deleted", func() {
+			var replica corev1.ConfigMap
+
+			By("checking that replica exists")
 			Eventually(func(g Gomega) {
-				var replica corev1.ConfigMap
 				err := k8sClient.Get(ctx, ctrlclient.ObjectKey{Namespace: "testing", Name: sourceConfigMap.Name}, &replica)
 				g.Expect(err).NotTo(HaveOccurred())
+			}).WithTimeout(5 * time.Second).Should(Succeed())
 
-				err = k8sClient.Delete(ctx, &replica)
-				g.Expect(err).NotTo(HaveOccurred())
+			By("deleting replica")
+			err := k8sClient.Delete(ctx, &replica)
+			Expect(err).NotTo(HaveOccurred())
 
-				err = k8sClient.Get(ctx, ctrlclient.ObjectKeyFromObject(&replica), &replica)
+			By("checking that replica was deleted")
+			Eventually(func(g Gomega) bool {
+				err := k8sClient.Get(ctx, ctrlclient.ObjectKeyFromObject(&replica), &replica)
+				return apierrors.IsNotFound(err)
+			}).WithTimeout(5 * time.Second).Should(BeTrue())
+
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(ctx, ctrlclient.ObjectKeyFromObject(&replica), &replica)
 				g.Expect(err).NotTo(HaveOccurred())
-			}).Should(Succeed())
+			}).WithTimeout(5 * time.Second).Should(Succeed())
 		})
 
 		It("should update a replica with source when it was updated", func() {
@@ -126,33 +125,39 @@ var _ = Describe("SourceReconciler reconciles corev1.ConfigMap", func() {
 
 		It("should create a new replica when a new namespace was added", func() {
 			Eventually(func(g Gomega) {
-				err := k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "new"}})
-				g.Expect(err).NotTo(HaveOccurred())
+				err := k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: newNamespace}})
+				g.Expect(ctrlclient.IgnoreAlreadyExists(err)).NotTo(HaveOccurred())
 
 				var replica corev1.ConfigMap
-				err = k8sClient.Get(ctx, ctrlclient.ObjectKey{Name: sourceConfigMap.Name, Namespace: "new"}, &replica)
+				err = k8sClient.Get(ctx, ctrlclient.ObjectKey{Name: sourceConfigMap.Name, Namespace: newNamespace}, &replica)
 				g.Expect(err).NotTo(HaveOccurred())
 			}).Should(Succeed())
 		})
 
 		It("should delete all replicas when the source object was deleted", func() {
+			var source corev1.ConfigMap
+
+			By("checking that source exists")
 			Eventually(func(g Gomega) {
-				var source corev1.ConfigMap
-				err := k8sClient.Get(ctx, ctrlclient.ObjectKeyFromObject(sourceConfigMap), &source)
-				g.Expect(err).NotTo(HaveOccurred())
+				getErr := k8sClient.Get(ctx, ctrlclient.ObjectKeyFromObject(sourceConfigMap), &source)
+				g.Expect(ctrlclient.IgnoreNotFound(getErr)).NotTo(HaveOccurred())
+			}).WithTimeout(5 * time.Second).Should(Succeed())
 
-				err = k8sClient.Delete(ctx, &source)
-				g.Expect(err).NotTo(HaveOccurred())
+			By("deleting source")
+			err := k8sClient.Delete(ctx, &source)
+			Expect(err).NotTo(HaveOccurred())
 
+			By("checking that replicas were deleted")
+			Eventually(func(g Gomega) int {
 				var replicaList corev1.ConfigMapList
-				err = k8sClient.List(ctx, &replicaList, ctrlclient.MatchingLabels{
-					replicator.SourceNameLabel:      source.GetName(),
-					replicator.SourceNamespaceLabel: source.GetNamespace(),
+				err := k8sClient.List(ctx, &replicaList, ctrlclient.MatchingLabels{
+					replicator.SourceNameLabel:      sourceConfigMap.GetName(),
+					replicator.SourceNamespaceLabel: sourceConfigMap.GetNamespace(),
 				})
 				g.Expect(err).NotTo(HaveOccurred())
 
-				g.Expect(replicaList.Items).To(BeEmpty())
-			}).Should(Succeed())
+				return len(replicaList.Items)
+			}).Should(Equal(0))
 		})
 	})
 })

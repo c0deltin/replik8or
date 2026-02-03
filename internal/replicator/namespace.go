@@ -27,11 +27,9 @@ func (r *Replicator[T]) ListTargetNamespaces(ctx context.Context, source T) ([]s
 		return nil, err
 	}
 
-	for i, namespace := range targetNamespaces {
-		if source.GetNamespace() == namespace || slices.Contains(r.config.DisallowedNamespaces, namespace) {
-			targetNamespaces = slices.Delete(targetNamespaces, i, i+1)
-		}
-	}
+	targetNamespaces = slices.DeleteFunc(targetNamespaces, func(s string) bool {
+		return source.GetNamespace() == s || slices.Contains(r.config.DisallowedNamespaces, s)
+	})
 
 	return targetNamespaces, nil
 }

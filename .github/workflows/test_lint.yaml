@@ -8,10 +8,10 @@ on:
       - reopened
     branches:
       - main
-    paths:
-      - '**.go'
-      - 'go.mod'
-      - 'go.sum'
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/**'
 
 jobs:
   test:

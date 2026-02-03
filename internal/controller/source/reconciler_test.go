@@ -125,11 +125,11 @@ var _ = Describe("SourceReconciler reconciles corev1.ConfigMap", Ordered, func()
 
 		It("should create a new replica when a new namespace was added", func() {
 			Eventually(func(g Gomega) {
-				err := k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "new"}})
+				err := k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: newNamespace}})
 				g.Expect(ctrlclient.IgnoreAlreadyExists(err)).NotTo(HaveOccurred())
 
 				var replica corev1.ConfigMap
-				err = k8sClient.Get(ctx, ctrlclient.ObjectKey{Name: sourceConfigMap.Name, Namespace: "new"}, &replica)
+				err = k8sClient.Get(ctx, ctrlclient.ObjectKey{Name: sourceConfigMap.Name, Namespace: newNamespace}, &replica)
 				g.Expect(err).NotTo(HaveOccurred())
 			}).Should(Succeed())
 		})

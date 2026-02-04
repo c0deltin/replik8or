@@ -28,7 +28,7 @@ var (
 	testEnv   *envtest.Environment
 
 	systemNamespaces  = []string{"kube-node-lease", "kube-public", "kube-system"}
-	replicaNamespaces = []string{"testing", "foo"}
+	replicaNamespaces = []string{"testing", "foo", "bar"}
 	newNamespace      = "new"
 	sourceNamespace   = "default"
 

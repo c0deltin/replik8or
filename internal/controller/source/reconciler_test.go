@@ -2,6 +2,7 @@ package source
 
 import (
 	"reflect"
+	"slices"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -158,6 +159,43 @@ var _ = Describe("SourceReconciler reconciles corev1.ConfigMap", Ordered, func()
 
 				return len(replicaList.Items)
 			}).Should(Equal(0))
+		})
+
+		It("should create replicas in the namespaces defined by annotation", func() {
+			By("creating source ConfigMap")
+			source := sourceConfigMap.DeepCopy()
+			source.Annotations = map[string]string{
+				replicator.ReplicationAllowedAnnotation: "true",
+				replicator.DesiredNamespacesAnnotation:  "testing,bar",
+			}
+			Expect(k8sClient.Create(ctx, source)).To(Succeed())
+
+			By("checking replicas were created in desired namespaces")
+			Eventually(func(g Gomega) {
+				var replicaList corev1.ConfigMapList
+				err := k8sClient.List(ctx, &replicaList, ctrlclient.MatchingLabels{
+					replicator.SourceNameLabel:      sourceConfigMap.GetName(),
+					replicator.SourceNamespaceLabel: sourceConfigMap.GetNamespace(),
+				})
+				g.Expect(err).NotTo(HaveOccurred())
+
+				g.Expect(replicaList.Items).To(HaveLen(2)) // 2 = foo,baz
+			}).WithTimeout(5 * time.Second).WithPolling(100 * time.Millisecond).Should(Succeed())
+
+			By("ensuring replica was not created in any other namespaces")
+			Eventually(func(g Gomega) {
+				disallowed := append(systemNamespaces, newNamespace, sourceNamespace)
+				disallowed = append(disallowed, replicaNamespaces...)
+				disallowed = slices.DeleteFunc(disallowed, func(s string) bool {
+					return s == "testing" || s == "bar"
+				})
+
+				for _, ns := range systemNamespaces {
+					var configMap corev1.ConfigMap
+					err := k8sClient.Get(ctx, ctrlclient.ObjectKey{Name: sourceConfigMap.Name, Namespace: ns}, &configMap)
+					g.Expect(apierrors.IsNotFound(err)).To(BeTrue())
+				}
+			}).Should(Succeed())
 		})
 	})
 })

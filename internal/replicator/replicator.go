@@ -47,7 +47,6 @@ func (r *Replicator[T]) CreateOrUpdate(ctx context.Context, source, replica T) e
 
 // CopyFields copy fields of source to replica object.
 func CopyFields(source, replica client.Object) error {
-	source.DeepCopyObject()
 	switch v := replica.(type) {
 	case *corev1.Secret:
 		v.Data = source.(*corev1.Secret).Data

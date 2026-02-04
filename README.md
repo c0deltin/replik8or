@@ -4,6 +4,19 @@ A Kubernetes operator that replicates Secrets and ConfigMaps into namespaces.
 
 ## Deployment
 
+### Helm Deployment
+The preferred way to install replik8or is by using Helm:
+```shell
+$ helm upgrade --install replik8or oci://ghcr.io/c0deltin/helm-charts/replik8or
+```
+or 
+
+```shell
+$ helm repo add c0deltin https://c0deltin.github.io/helm-charts
+$ helm repo update
+$ helm upgrade --install replik8or c0deltin/replik8or
+```
+
 ### Configuration
 
 There are two ways of configuring ``replik8or``: Using environemnt variables or using flags.   

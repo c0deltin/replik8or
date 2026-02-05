@@ -190,7 +190,7 @@ var _ = Describe("SourceReconciler reconciles corev1.ConfigMap", Ordered, func()
 					return s == "testing" || s == "bar"
 				})
 
-				for _, ns := range systemNamespaces {
+				for _, ns := range disallowed {
 					var configMap corev1.ConfigMap
 					err := k8sClient.Get(ctx, ctrlclient.ObjectKey{Name: sourceConfigMap.Name, Namespace: ns}, &configMap)
 					g.Expect(apierrors.IsNotFound(err)).To(BeTrue())

@@ -187,7 +187,7 @@ var _ = Describe("SourceReconciler reconciles corev1.ConfigMap", Ordered, func()
 				disallowed := append(systemNamespaces, newNamespace, sourceNamespace)
 				disallowed = append(disallowed, replicaNamespaces...)
 				disallowed = slices.DeleteFunc(disallowed, func(s string) bool {
-					return s == "testing" || s == "bar"
+					return s == "testing" || s == "bar" || s == sourceNamespace
 				})
 
 				for _, ns := range disallowed {
